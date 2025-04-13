@@ -62,7 +62,7 @@ jobs:
         with:
           token: ${{ secrets.LVGL_BOT_TOKEN }}
           commit-message: ${{ env.GITHUB_SHA }}
-          branch: master
+          branch: main
           folder: ports/javascript/bundle_out
           repository-name: lvgl/sim
           target-folder: v${{ steps.version.outputs.VERSION_NAME }}/micropython/ports/javascript

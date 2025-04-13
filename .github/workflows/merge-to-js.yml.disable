@@ -1,8 +1,8 @@
-name: Merge master branch to lvgl_javascript
+name: Merge main branch to lvgl_javascript
 on:
   push:
     branches:
-      - 'master'
+      - 'main'
 jobs:
   merge-branch:
     runs-on: ubuntu-20.04
@@ -17,7 +17,7 @@ jobs:
       - name: Skip merge
         run: exit 1
         if: steps.wait-for-build.outputs.conclusion == 'failure'
-      - uses: actions/checkout@master
+      - uses: actions/checkout@main
       - name: Merge to lvgl_javascript branch
         uses: devmasx/merge-branch@v1.1.0
         with:
