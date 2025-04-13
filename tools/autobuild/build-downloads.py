@@ -5,6 +5,14 @@ import json
 import os
 import sys
 
+TARGET_PORTS = [
+    "esp32",
+]
+
+TARGET_BOARDS = [
+    "ESP32_GENERIC_S3_LVGL"
+]
+
 VALID_FEATURES = {
     # Connectivity
     "BLE",
@@ -47,6 +55,12 @@ def main(repo_path, output_path):
     board_ids = set()
 
     for board_json in glob.glob(os.path.join(repo_path, "ports/*/boards/*/board.json")):
+        # skip boards not in target list
+        if not any(f"/{port}/" in board_json for port in TARGET_PORTS):
+            continue
+        if not any(f"/{board}/" in board_json for board in TARGET_BOARDS):
+            continue
+
         # Relative path to the board directory (e.g. "ports/stm32/boards/PYBV11").
         board_dir = os.path.dirname(board_json)
         # Relative path to the port (e.g. "ports/stm32")
