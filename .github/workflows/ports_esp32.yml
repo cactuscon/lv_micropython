@@ -47,6 +47,10 @@ jobs:
       if: steps.cache_esp_idf.outputs.cache-hit != 'true'
       run: source tools/ci.sh && ci_esp32_idf_setup
 
+    - name: Setup user modules
+      if: steps.cache_esp_idf.outputs.cache-hit != 'true'
+      run: git submodule update --init --recursive user_modules/lv_binding_micropython
+
     - name: ccache
       uses: hendrikmuhs/ccache-action@v1.2
       with:
