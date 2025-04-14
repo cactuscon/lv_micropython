@@ -2,6 +2,7 @@ name: esp32 port
 
 on:
   push:
+    branches: [main]
   pull_request:
     paths:
       - '.github/workflows/*.yml'
@@ -18,6 +19,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
+  validate_version_tag:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate version tag
+        run: |
+          git fetch --tags origin main
+          MAIN_TAG=$(git tag --merged origin/main | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          echo "Latest version on main: $MAIN_TAG"
+
+          HEAD_TAG=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+
+          if [ -z "$HEAD_TAG" ]; then
+            echo "::error::Your branch must be tagged with a semver version like 'v0.1.4'."
+            echo "Hint: git tag v<NEW_VERSION> && git push origin v<NEW_VERSION>"
+            exit 1
+          fi
+
+          COMBINED=$(echo -e "${MAIN_TAG}\n${HEAD_TAG}" | sort -V | tail -1)
+          if [ "$COMBINED" != "$HEAD_TAG" ]; then
+            echo "::error::Your tag ($HEAD_TAG) is not greater than main's latest tag ($MAIN_TAG)."
+            exit 1
+          fi
+
   build_idf:
     strategy:
       fail-fast: false
@@ -25,12 +53,27 @@ jobs:
         ci_func:  # names are functions in ci.sh
           - esp32_build_s3_lvgl
     runs-on: ubuntu-20.04
+    outputs:
+      VERSION: ${{ steps.get_version.outputs.VERSION }}
+      
     steps:
     - uses: actions/checkout@v4
 
     - id: idf_ver
       name: Read the ESP-IDF version
       run: source tools/ci.sh && echo "IDF_VER=$IDF_VER" | tee "$GITHUB_OUTPUT"
+
+    - id: get_version
+      name: Get version tag on HEAD
+      if: github.ref == 'refs/heads/main'
+      run: |
+        VERSION=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || echo "untagged")
+        if [ "$VERSION" = "untagged" ]; then
+          echo "::error::Missing version tag on commit to main. Please tag your PR branch before merge."
+          exit 1
+        fi
+        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+        echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
     - name: Cached ESP-IDF install
       id: cache_esp_idf
@@ -58,3 +101,37 @@ jobs:
 
     - name: Build ci_${{matrix.ci_func }}
       run: source tools/ci.sh && ci_${{ matrix.ci_func }}
+
+    - name: Build firmware
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        cd scripts
+        chmod +x build-esp32.sh
+        BOARD=ESP32_GENERIC_S3_LVGL ./build-esp32.sh
+        cp ports/esp32/build-ESP32_GENERIC_S3_LVGL/micropython.bin \
+          esp32_s3_micropython_lvgl-${VERSION}.bin
+
+    - name: Upload firmware artifact
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v3
+      with:
+        name: firmware
+        path: esp32_s3_micropython_lvgl-${{ env.VERSION }}.bin
+
+  release_artifact:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build_idf
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: firmware
+
+      - name: Create GitHub release from tag
+        run: |
+          gh release create "${{ needs.build_idf.outputs.VERSION }}" \
+            esp32_s3_micropython_lvgl-${{ needs.build_idf.outputs.VERSION }}.bin \
+            --title "ESP32-S3 MicroPython LVGL ${{ needs.build_idf.outputs.VERSION }}" \
+            --notes "Automated release for LVGL ESP32 firmware."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
