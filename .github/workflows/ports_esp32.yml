@@ -24,37 +24,49 @@ permissions:
 jobs:
 
   validate_version_tag:
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate version tag
+      - name: Extract version from branch name
+        id: extract_version
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          VERSION="${BRANCH_NAME#release/}"
+
+          echo "Found version from branch: $VERSION"
+
+          if ! echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Branch name must follow format release/vX.Y.Z"
+            exit 1
+          fi
+
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Switch to source branch
         run: |
           git fetch origin ${{ github.head_ref }}
           git switch ${{ github.head_ref }}
 
+      - name: Fetch tags and compare
+        run: |
+          git fetch --tags origin
+          git fetch origin main --depth=1
+
           MAIN_TAG=$(git tag --merged origin/main | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
-          if [ -z "$MAIN_TAG" ]; then
-            echo "::error::No version tag found on main branch."
-          else
-            echo "Latest version on main: $MAIN_TAG"
-          fi
+          echo "Latest version on main: $MAIN_TAG"
+          echo "Proposed version: $VERSION"
 
-          HEAD_SHA=$(git rev-parse HEAD)
-          HEAD_TAG=$(git tag --points-at $HEAD_SHA | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
-
-          if [ -z "$HEAD_TAG" ]; then
-            echo "::error::Your branch must be tagged with a semver version like 'v0.1.4'."
-            echo "Hint: git tag v<NEW_VERSION> && git push origin v<NEW_VERSION>"
+          COMBINED=$(echo -e "${MAIN_TAG}\n${VERSION}" | sort -V | tail -1)
+          if [ "$COMBINED" != "$VERSION" ]; then
+            echo "::error::Your branch version ($VERSION) must be greater than main's latest tag ($MAIN_TAG)"
             exit 1
           fi
 
-          COMBINED=$(echo -e "${MAIN_TAG}\n${HEAD_TAG}" | sort -V | tail -1)
-          if [ "$COMBINED" != "$HEAD_TAG" ]; then
-            echo "::error::Your tag ($HEAD_TAG) is not greater than main's latest tag ($MAIN_TAG)."
-            exit 1
-          fi
+          echo "✅ Version check passed: $VERSION > $MAIN_TAG"
+
 
   build_idf:
     strategy:
@@ -112,7 +124,7 @@ jobs:
       run: source tools/ci.sh && ci_${{ matrix.ci_func }}
 
     - name: Build firmware
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.head_ref, 'release/')
       run: |
         cd scripts
         chmod +x build-esp32.sh
@@ -123,7 +135,7 @@ jobs:
 
     - name: Upload firmware artifact
       uses: actions/upload-artifact@v4
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.head_ref, 'release/')
       with:
         name: firmware
         path: ./esp32_s3_micropython_lvgl-${{ env.VERSION }}.bin
@@ -131,8 +143,8 @@ jobs:
         if-no-files-found: error
 
   release_artifact:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build_idf
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.head_ref, 'release/')
+    needs: [validate_version_tag, build_idf]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
