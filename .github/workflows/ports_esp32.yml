@@ -33,6 +33,12 @@ jobs:
         run: |
           git fetch --tags origin main
           MAIN_TAG=$(git tag --merged origin/main | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          if [ -z "$MAIN_TAG" ]; then
+            echo "::error::No version tag found on main branch."
+            echo "Hint: git tag v<NEW_VERSION> && git push origin v<NEW_VERSION>"
+            exit 1
+          fi
+          
           echo "Latest version on main: $MAIN_TAG"
 
           HEAD_TAG=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
