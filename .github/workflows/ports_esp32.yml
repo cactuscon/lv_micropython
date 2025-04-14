@@ -28,11 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Fetch full history + tags
-        run: |
-          git fetch --tags --force --prune
-          git fetch origin +refs/tags/*:refs/tags/*
+        with:
+          fetch-tags: true
+          fetch-depth: 0
 
       - name: Validate version tag
         run: |
