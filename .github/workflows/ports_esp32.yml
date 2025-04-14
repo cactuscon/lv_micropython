@@ -18,6 +18,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write  # Required for creating releases/tags
+
 jobs:
 
   validate_version_tag:
@@ -108,30 +111,33 @@ jobs:
         cd scripts
         chmod +x build-esp32.sh
         BOARD=ESP32_GENERIC_S3_LVGL ./build-esp32.sh
+        cd ..
         cp ports/esp32/build-ESP32_GENERIC_S3_LVGL/micropython.bin \
-          esp32_s3_micropython_lvgl-${VERSION}.bin
+          esp32_s3_micropython_lvgl-${{ env.VERSION }}.bin
 
     - name: Upload firmware artifact
+      uses: actions/upload-artifact@v4
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: actions/upload-artifact@v3
       with:
         name: firmware
-        path: esp32_s3_micropython_lvgl-${{ env.VERSION }}.bin
+        path: ./esp32_s3_micropython_lvgl-${{ env.VERSION }}.bin
+        retention-days: 1
+        if-no-files-found: error
 
   release_artifact:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build_idf
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: firmware
 
       - name: Create GitHub release from tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ needs.build_idf.outputs.VERSION }}" \
             esp32_s3_micropython_lvgl-${{ needs.build_idf.outputs.VERSION }}.bin \
             --title "ESP32-S3 MicroPython LVGL ${{ needs.build_idf.outputs.VERSION }}" \
             --notes "Automated release for LVGL ESP32 firmware."
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
