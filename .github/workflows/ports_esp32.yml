@@ -28,12 +28,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-tags: true
-          fetch-depth: 0
 
       - name: Validate version tag
         run: |
+          git fetch origin ${{ github.head_ref }}
+          git switch ${{ github.head_ref }}
+
           MAIN_TAG=$(git tag --merged origin/main | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
           if [ -z "$MAIN_TAG" ]; then
             echo "::error::No version tag found on main branch."
@@ -41,7 +41,8 @@ jobs:
             echo "Latest version on main: $MAIN_TAG"
           fi
 
-          HEAD_TAG=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          HEAD_SHA=$(git rev-parse HEAD)
+          HEAD_TAG=$(git tag --points-at $HEAD_SHA | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
 
           if [ -z "$HEAD_TAG" ]; then
             echo "::error::Your branch must be tagged with a semver version like 'v0.1.4'."
