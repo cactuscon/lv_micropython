@@ -2,6 +2,7 @@ name: esp32 port
 
 on:
   push:
+    branches: [main]
   pull_request:
     paths:
       - '.github/workflows/*.yml'
@@ -17,21 +18,84 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write  # Required for creating releases/tags
+
 jobs:
+
+  validate_version_tag:
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from branch name
+        id: extract_version
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          VERSION="${BRANCH_NAME#release/}"
+
+          echo "Found version from branch: $VERSION"
+
+          if ! echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Branch name must follow format release/vX.Y.Z"
+            exit 1
+          fi
+
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Switch to source branch
+        run: |
+          git fetch origin ${{ github.head_ref }}
+          git switch ${{ github.head_ref }}
+
+      - name: Fetch tags and compare
+        run: |
+          git fetch --tags origin
+          git fetch origin main --depth=1
+
+          MAIN_TAG=$(git tag --merged origin/main | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          echo "Latest version on main: $MAIN_TAG"
+          echo "Proposed version: $VERSION"
+
+          COMBINED=$(echo -e "${MAIN_TAG}\n${VERSION}" | sort -V | tail -1)
+          if [ "$COMBINED" != "$VERSION" ]; then
+            echo "::error::Your branch version ($VERSION) must be greater than main's latest tag ($MAIN_TAG)"
+            exit 1
+          fi
+
+          echo "✅ Version check passed: $VERSION > $MAIN_TAG"
+
+
   build_idf:
     strategy:
       fail-fast: false
       matrix:
         ci_func:  # names are functions in ci.sh
-          - esp32_build_cmod_spiram_s2
-          - esp32_build_s3_c3
+          - esp32_build_s3_lvgl
     runs-on: ubuntu-20.04
+    outputs:
+      VERSION: ${{ steps.get_version.outputs.VERSION }}
+      
     steps:
     - uses: actions/checkout@v4
 
     - id: idf_ver
       name: Read the ESP-IDF version
       run: source tools/ci.sh && echo "IDF_VER=$IDF_VER" | tee "$GITHUB_OUTPUT"
+
+    - id: get_version
+      name: Get version tag on HEAD
+      if: github.ref == 'refs/heads/main'
+      run: |
+        VERSION=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || echo "untagged")
+        if [ "$VERSION" = "untagged" ]; then
+          echo "::error::Missing version tag on commit to main. Please tag your PR branch before merge."
+          exit 1
+        fi
+        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+        echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
     - name: Cached ESP-IDF install
       id: cache_esp_idf
@@ -48,6 +112,9 @@ jobs:
       if: steps.cache_esp_idf.outputs.cache-hit != 'true'
       run: source tools/ci.sh && ci_esp32_idf_setup
 
+    - name: Setup user modules
+      run: git submodule update --init --recursive user_modules/lv_binding_micropython
+
     - name: ccache
       uses: hendrikmuhs/ccache-action@v1.2
       with:
@@ -55,3 +122,40 @@ jobs:
 
     - name: Build ci_${{matrix.ci_func }}
       run: source tools/ci.sh && ci_${{ matrix.ci_func }}
+
+    - name: Build firmware
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.head_ref, 'release/')
+      run: |
+        cd scripts
+        chmod +x build-esp32.sh
+        BOARD=ESP32_GENERIC_S3_LVGL ./build-esp32.sh
+        cd ..
+        cp ports/esp32/build-ESP32_GENERIC_S3_LVGL/micropython.bin \
+          esp32_s3_micropython_lvgl-${{ env.VERSION }}.bin
+
+    - name: Upload firmware artifact
+      uses: actions/upload-artifact@v4
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.head_ref, 'release/')
+      with:
+        name: firmware
+        path: ./esp32_s3_micropython_lvgl-${{ env.VERSION }}.bin
+        retention-days: 1
+        if-no-files-found: error
+
+  release_artifact:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.head_ref, 'release/')
+    needs: [validate_version_tag, build_idf]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware
+
+      - name: Create GitHub release from tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ needs.build_idf.outputs.VERSION }}" \
+            esp32_s3_micropython_lvgl-${{ needs.build_idf.outputs.VERSION }}.bin \
+            --title "ESP32-S3 MicroPython LVGL ${{ needs.build_idf.outputs.VERSION }}" \
+            --notes "Automated release for LVGL ESP32 firmware."
