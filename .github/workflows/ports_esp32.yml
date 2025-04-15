@@ -117,7 +117,17 @@ jobs:
       if: steps.cache_esp_idf.outputs.cache-hit != 'true'
       run: source tools/ci.sh && ci_esp32_idf_setup
 
-    - name: Setup user modules
+    - name: Cache user modules
+      id: cache_submodules
+      uses: actions/cache@v4
+      with:
+        path: |
+          user_modules/lv_binding_micropython
+          lib/
+        key: user-modules-${{ hashFiles('.gitmodules') }}
+
+    - name: Setup submodules
+      if: steps.cache_submodules.outputs.cache-hit != 'true'
       run: |
         git submodule update --init --recursive user_modules/lv_binding_micropython
         git submodule update --init --recursive lib/
@@ -130,24 +140,17 @@ jobs:
     - name: Build ci_${{matrix.ci_func }}
       run: source tools/ci.sh && ci_${{ matrix.ci_func }}
 
-    - name: Build firmware
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      run: |
-        cd scripts
-        chmod +x build-esp32.sh
-        BOARD=ESP32_GENERIC_S3_LVGL ./build-esp32.sh
-        cd ..
-        cp ports/esp32/build-ESP32_GENERIC_S3_LVGL/micropython.bin \
-          esp32_s3_micropython_lvgl-${{ env.VERSION }}.bin
-
-    - name: Upload firmware artifact
+    - name: Upload firmware artifacts
       uses: actions/upload-artifact@v4
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       with:
         name: firmware
-        path: ./esp32_s3_micropython_lvgl-${{ env.VERSION }}.bin
+        path: |
+          ports/esp32/build-ESP32_GENERIC_S3_LVGL/bootloader/bootloader.bin
+          ports/esp32/build-ESP32_GENERIC_S3_LVGL/partition_table/partition-table.bin
+          ports/esp32/build-ESP32_GENERIC_S3_LVGL/micropython.bin
         retention-days: 1
-        if-no-files-found: error
+        if-no-files-found: error 
 
   release_artifact:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -157,12 +160,20 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: firmware
+          path: firmware_files  # download into subfolder for clarity
+
+      - name: List downloaded firmware
+        run: ls -R firmware_files
 
       - name: Create GitHub release from tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.validate_version_tag.outputs.VERSION }}
         run: |
-          gh release create "${{ needs.validate_version_tag.outputs.VERSION }}" \
-            esp32_s3_micropython_lvgl-${{ needs.validate_version_tag.outputs.VERSION }}.bin \
-            --title "ESP32-S3 MicroPython LVGL ${{ needs.validate_version_tag.outputs.VERSION }}" \
-            --notes "Automated release for LVGL ESP32 firmware."
+          gh release create "$VERSION" \
+            firmware_files/bootloader.bin \
+            firmware_files/partition-table.bin \
+            firmware_files/micropython.bin \
+            --title "ESP32-S3 MicroPython LVGL $VERSION" \
+            --notes "Automated release for ESP32-S3 firmware"
+
