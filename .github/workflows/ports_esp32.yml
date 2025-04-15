@@ -24,7 +24,7 @@ permissions:
 jobs:
 
   validate_version_tag:
-    if: startsWith(github.head_ref, 'release/')
+    if: (startsWith(github.head_ref, 'release/')) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     outputs:
       VERSION: ${{ steps.extract_version.outputs.VERSION }} 
@@ -141,7 +141,7 @@ jobs:
         if-no-files-found: error
 
   release_artifact:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.head_ref, 'release/')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [validate_version_tag, build_idf]
     runs-on: ubuntu-latest
     steps:
