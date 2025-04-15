@@ -4,15 +4,7 @@
 
 # Array of configurations
 configs=(
-    "ESP32_GENERIC"
-    "ESP32_GENERIC SPIRAM"
-    "ESP32_GENERIC_S3"
-    "ESP32_GENERIC_S3 SPIRAM_OCT"
-    "M5STACK_CORE2"
-    "LILYGO_TDISPLAY"
-    "LILYGO_TWATCH_2020 V1"
-    "LILYGO_TWATCH_2020 V2"
-    "LILYGO_TWATCH_2020 V3"
+    "ESP32_GENERIC_S3_LVGL"
 )
 
 # Function to display menu and get user choice
