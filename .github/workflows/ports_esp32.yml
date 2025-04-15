@@ -130,7 +130,7 @@ jobs:
       run: source tools/ci.sh && ci_${{ matrix.ci_func }}
 
     - name: Build firmware
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.head_ref, 'release/')
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
         cd scripts
         chmod +x build-esp32.sh
@@ -141,7 +141,7 @@ jobs:
 
     - name: Upload firmware artifact
       uses: actions/upload-artifact@v4
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.head_ref, 'release/')
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       with:
         name: firmware
         path: ./esp32_s3_micropython_lvgl-${{ env.VERSION }}.bin
