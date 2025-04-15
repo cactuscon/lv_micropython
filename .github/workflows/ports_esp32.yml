@@ -54,6 +54,9 @@ jobs:
             exit 1
           fi
 
+          # remove whitespace and newlines
+          VERSION=$(echo "$VERSION" | tr -d '[:space:]' | tr -d '\n')
+          
           echo "Extracted version: $VERSION"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
