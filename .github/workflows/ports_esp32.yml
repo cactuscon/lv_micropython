@@ -31,35 +31,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from branch or tag
+      - name: Resolve tag from GitHub API
         id: extract_version
         run: |
-          # Always ensure tags are fetched
-          git fetch --tags --force origin +refs/tags/*:refs/tags/*
+          VERSION=$(gh api repos/${{ github.repository }}/git/matching-refs/tags \
+            | jq -r '.[] | select(.object.sha == "${{ github.sha }}") | .ref' \
+            | sed 's|refs/tags/||' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V | tail -1)
 
-          # Handle PRs (head_ref is available)
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BRANCH_NAME="${{ github.head_ref }}"
-            VERSION="${BRANCH_NAME#release/}"
-          else
-            # Push to main — try to extract version from latest tag pointing to HEAD
-            VERSION=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
-            if [ -z "$VERSION" ]; then
-              echo "::error::Unable to determine version from HEAD on push to main."
-              echo "Make sure this commit is tagged (e.g., git tag v1.2.3 && git push origin v1.2.3)"
-              exit 1
-            fi
-          fi
-      
-          echo "Detected version: $VERSION"
-      
-          if ! echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Version must match vX.Y.Z format"
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not find version tag pointing to commit ${{ github.sha }}"
             exit 1
           fi
-      
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "VERSION=$VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
       - name: Fetch tags and compare
         run: |
