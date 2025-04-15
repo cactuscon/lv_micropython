@@ -46,7 +46,7 @@ jobs:
             VERSION=$(echo "$COMMIT_MSG" | grep -oE 'release/v[0-9]+\.[0-9]+\.[0-9]+$' | cut -d/ -f2)
           else
             echo "::error::Unsupported event context"
-            exit 1
+            VERSION="untagged"
           fi
 
           if [ -z "$VERSION" ]; then
@@ -62,6 +62,7 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
     
       - name: Fetch tags and compare
+        if: steps.extract_version.outputs.VERSION != 'untagged'
         run: |
           git fetch --tags origin
           git fetch origin main --depth=1
@@ -79,29 +80,27 @@ jobs:
           echo "Version check passed: $VERSION > $MAIN_TAG"
 
   build_idf:
+    needs: validate_version_tag
     strategy:
       fail-fast: false
       matrix:
         ci_func:  # names are functions in ci.sh
           - esp32_build_s3_lvgl
-    runs-on: ubuntu-20.04
-    outputs:
-      VERSION: ${{ steps.get_version.outputs.VERSION }}
-      
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.validate_version_tag.outputs.VERSION }}
+      BOARD: ESP32_GENERIC_S3_LVGL
+
     steps:
     - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
 
     - id: idf_ver
       name: Read the ESP-IDF version
       run: source tools/ci.sh && echo "IDF_VER=$IDF_VER" | tee "$GITHUB_OUTPUT"
-
-    - id: get_version
-      name: Get version tag on HEAD
-      if: github.ref == 'refs/heads/main'
-      run: |
-        VERSION="${{ needs.validate_version_tag.outputs.VERSION }}"
-        echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-        echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
     - name: Cached ESP-IDF install
       id: cache_esp_idf
@@ -119,7 +118,9 @@ jobs:
       run: source tools/ci.sh && ci_esp32_idf_setup
 
     - name: Setup user modules
-      run: git submodule update --init --recursive user_modules/lv_binding_micropython
+      run: |
+        git submodule update --init --recursive user_modules/lv_binding_micropython
+        git submodule update --init --recursive lib/
 
     - name: ccache
       uses: hendrikmuhs/ccache-action@v1.2
@@ -161,7 +162,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ needs.build_idf.outputs.VERSION }}" \
-            esp32_s3_micropython_lvgl-${{ needs.build_idf.outputs.VERSION }}.bin \
-            --title "ESP32-S3 MicroPython LVGL ${{ needs.build_idf.outputs.VERSION }}" \
+          gh release create "${{ needs.validate_version_tag.outputs.VERSION }}" \
+            esp32_s3_micropython_lvgl-${{ needs.validate_version_tag.outputs.VERSION }}.bin \
+            --title "ESP32-S3 MicroPython LVGL ${{ needs.validate_version_tag.outputs.VERSION }}" \
             --notes "Automated release for LVGL ESP32 firmware."
