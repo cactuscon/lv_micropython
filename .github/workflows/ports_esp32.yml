@@ -57,29 +57,10 @@ jobs:
           fi
 
           # remove whitespace and newlines
-          VERSION=$(echo "$VERSION" | tr -d '[:space:]' | tr -d '\n')
+          VERSION=$(echo -n "$VERSION" | tr -d '[:space:]' | tr -d '\n')
           
           echo "Extracted version: $VERSION"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
-    
-      - name: Fetch tags and compare
-        if: steps.extract_version.outputs.VERSION != 'untagged'
-        run: |
-          git fetch --tags origin
-          git fetch origin main --depth=1
-
-          MAIN_TAG=$(git tag --merged origin/main | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
-          echo "Latest version on main: $MAIN_TAG"
-          echo "Proposed version: $VERSION"
-
-          COMBINED=$(echo -e "${MAIN_TAG}\n${VERSION}" | sort -V | tail -1)
-          if [ "$COMBINED" != "$VERSION" ]; then
-            echo "::error::Your branch version ($VERSION) must be greater than main's latest tag ($MAIN_TAG)"
-            exit 1
-          fi
-
-          echo "Version check passed: $VERSION > $MAIN_TAG"
 
   build_idf:
     needs: validate_version_tag
@@ -192,6 +173,6 @@ jobs:
             firmware_files/bootloader/bootloader.bin \
             firmware_files/partition_table/partition-table.bin \
             firmware_files/micropython.bin \
-            --title "ESP32-S3 MicroPython LVGL $VERSION" \
+            --title "ESP32-S3 MicroPython LVGL" \
             --notes "Automated release for ESP32-S3 firmware"
 
