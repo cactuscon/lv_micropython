@@ -167,6 +167,10 @@ jobs:
     needs: [validate_version_tag, build_idf]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+          
       - uses: actions/download-artifact@v4
         with:
           name: firmware
