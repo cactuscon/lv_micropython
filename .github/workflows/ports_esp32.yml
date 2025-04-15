@@ -34,6 +34,9 @@ jobs:
       - name: Extract version from branch or tag
         id: extract_version
         run: |
+          # Always ensure tags are fetched
+          git fetch --tags --force origin +refs/tags/*:refs/tags/*
+
           # Handle PRs (head_ref is available)
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BRANCH_NAME="${{ github.head_ref }}"
@@ -58,11 +61,6 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
     
-      - name: Switch to source branch
-        run: |
-          git fetch origin ${{ github.head_ref }}
-          git switch ${{ github.head_ref }}
-
       - name: Fetch tags and compare
         run: |
           git fetch --tags origin
@@ -78,7 +76,7 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Version check passed: $VERSION > $MAIN_TAG"
+          echo "Version check passed: $VERSION > $MAIN_TAG"
 
   build_idf:
     strategy:
