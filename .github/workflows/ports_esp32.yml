@@ -31,22 +31,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from branch name
+      - name: Extract version from branch or tag
         id: extract_version
         run: |
-          BRANCH_NAME="${{ github.head_ref }}"
-          VERSION="${BRANCH_NAME#release/}"
-
-          echo "Found version from branch: $VERSION"
-
+          # Handle PRs (head_ref is available)
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BRANCH_NAME="${{ github.head_ref }}"
+            VERSION="${BRANCH_NAME#release/}"
+          else
+            # Push to main — try to extract version from latest tag pointing to HEAD
+            VERSION=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+            if [ -z "$VERSION" ]; then
+              echo "::error::Unable to determine version from HEAD on push to main."
+              echo "Make sure this commit is tagged (e.g., git tag v1.2.3 && git push origin v1.2.3)"
+              exit 1
+            fi
+          fi
+      
+          echo "Detected version: $VERSION"
+      
           if ! echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Branch name must follow format release/vX.Y.Z"
+            echo "::error::Version must match vX.Y.Z format"
             exit 1
           fi
-
+      
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
-
+    
       - name: Switch to source branch
         run: |
           git fetch origin ${{ github.head_ref }}
@@ -68,7 +79,6 @@ jobs:
           fi
 
           echo "✅ Version check passed: $VERSION > $MAIN_TAG"
-
 
   build_idf:
     strategy:
