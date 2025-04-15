@@ -30,6 +30,8 @@ jobs:
       VERSION: ${{ steps.extract_version.outputs.VERSION }} 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
 
       - name: Extract version from PR branch or merge commit
         id: extract_version
@@ -117,14 +119,14 @@ jobs:
       if: steps.cache_esp_idf.outputs.cache-hit != 'true'
       run: source tools/ci.sh && ci_esp32_idf_setup
 
-    - name: Cache user modules
+    - name: Restore submodules
       id: cache_submodules
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v4
       with:
         path: |
           user_modules/lv_binding_micropython
           lib/
-        key: user-modules-${{ hashFiles('.gitmodules') }}
+        key: submodules-${{ hashFiles('.gitmodules') }}
 
     - name: Setup submodules
       if: steps.cache_submodules.outputs.cache-hit != 'true'
@@ -139,6 +141,14 @@ jobs:
 
     - name: Build ci_${{matrix.ci_func }}
       run: source tools/ci.sh && ci_${{ matrix.ci_func }}
+
+    - name: Cache Submodules
+      uses: actions/cache/save/@v4
+      with:
+        path: |
+          user_modules/lv_binding_micropython
+          lib/
+        key: ${{ steps.cache_submodules.outputs.cache-primary-key }}
 
     - name: Upload firmware artifacts
       uses: actions/upload-artifact@v4
@@ -171,8 +181,8 @@ jobs:
           VERSION: ${{ needs.validate_version_tag.outputs.VERSION }}
         run: |
           gh release create "$VERSION" \
-            firmware_files/bootloader.bin \
-            firmware_files/partition-table.bin \
+            firmware_files/bootloader/bootloader.bin \
+            firmware_files/partition_table/partition-table.bin \
             firmware_files/micropython.bin \
             --title "ESP32-S3 MicroPython LVGL $VERSION" \
             --notes "Automated release for ESP32-S3 firmware"
