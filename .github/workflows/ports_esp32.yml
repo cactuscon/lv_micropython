@@ -117,7 +117,17 @@ jobs:
       if: steps.cache_esp_idf.outputs.cache-hit != 'true'
       run: source tools/ci.sh && ci_esp32_idf_setup
 
-    - name: Setup user modules
+    - name: Cache user modules
+      id: cache_submodules
+      uses: actions/cache@v4
+      with:
+        path: |
+          user_modules/lv_binding_micropython
+          lib/
+        key: user-modules-${{ hashFiles('.gitmodules') }}
+
+    - name: Setup submodules
+      if: steps.cache_submodules.outputs.cache-hit != 'true'
       run: |
         git submodule update --init --recursive user_modules/lv_binding_micropython
         git submodule update --init --recursive lib/
