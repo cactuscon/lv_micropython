@@ -31,33 +31,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from branch or tag
+      - name: Extract version from PR branch or merge commit
         id: extract_version
         run: |
-          # Always ensure tags are fetched
-          git fetch --tags --force origin +refs/tags/*:refs/tags/*
-
-          # Handle PRs (head_ref is available)
           if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "Event is pull_request"
             BRANCH_NAME="${{ github.head_ref }}"
             VERSION="${BRANCH_NAME#release/}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "Event is push to main"
+            COMMIT_MSG=$(git log -1 --pretty=%B)
+            echo "Commit message: $COMMIT_MSG"
+
+            VERSION=$(echo "$COMMIT_MSG" | grep -oE 'release/v[0-9]+\.[0-9]+\.[0-9]+$' | cut -d/ -f2)
           else
-            # Push to main — try to extract version from latest tag pointing to HEAD
-            VERSION=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
-            if [ -z "$VERSION" ]; then
-              echo "::error::Unable to determine version from HEAD on push to main."
-              echo "Make sure this commit is tagged (e.g., git tag v1.2.3 && git push origin v1.2.3)"
-              exit 1
-            fi
-          fi
-      
-          echo "Detected version: $VERSION"
-      
-          if ! echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Version must match vX.Y.Z format"
+            echo "::error::Unsupported event context"
             exit 1
           fi
-      
+
+          if [ -z "$VERSION" ]; then
+            echo "::error::Failed to extract version from branch or commit"
+            exit 1
+          fi
+
+          echo "Extracted version: $VERSION"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
     
