@@ -86,13 +86,17 @@ jobs:
       matrix:
         ci_func:  # names are functions in ci.sh
           - esp32_build_s3_lvgl
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       VERSION: ${{ needs.validate_version_tag.outputs.VERSION }}
       BOARD: ESP32_GENERIC_S3_LVGL
 
     steps:
     - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
 
     - id: idf_ver
       name: Read the ESP-IDF version
@@ -114,7 +118,9 @@ jobs:
       run: source tools/ci.sh && ci_esp32_idf_setup
 
     - name: Setup user modules
-      run: git submodule update --init --recursive user_modules/lv_binding_micropython
+      run: |
+        git submodule update --init --recursive user_modules/lv_binding_micropython
+        git submodule update --init --recursive lib/
 
     - name: ccache
       uses: hendrikmuhs/ccache-action@v1.2
