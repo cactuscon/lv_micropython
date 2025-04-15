@@ -173,5 +173,5 @@ jobs:
             firmware_files/partition_table/partition-table.bin \
             firmware_files/micropython.bin \
             --title "ESP32-S3 MicroPython LVGL" \
-            --notes "Automated release for ESP32-S3 firmware"
+            --notes "Automated release for ESP32-S3 firmware\n\nLoad firmware with:\n```bash\npython -m esptool --chip esp32s3 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size 8MB --flash_freq 80m 0x0 bootloader.bin 0x8000 partition-table.bin 0x10000 micropython.bin` \n"
 
