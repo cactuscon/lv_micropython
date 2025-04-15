@@ -124,9 +124,11 @@ jobs:
       uses: actions/cache/restore@v4
       with:
         path: |
+          .git/modules/lib/
+          .git/modules/user_modules/
           user_modules/lv_binding_micropython
           lib/
-        key: submodules-${{ hashFiles('.gitmodules') }}
+        key: mpy-submodules-${{ hashFiles('.gitmodules') }}
 
     - name: Setup submodules
       if: steps.cache_submodules.outputs.cache-hit != 'true'
@@ -146,6 +148,8 @@ jobs:
       uses: actions/cache/save/@v4
       with:
         path: |
+          .git/modules/lib/
+          .git/modules/user_modules/
           user_modules/lv_binding_micropython
           lib/
         key: ${{ steps.cache_submodules.outputs.cache-primary-key }}
@@ -167,6 +171,10 @@ jobs:
     needs: [validate_version_tag, build_idf]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+
       - uses: actions/download-artifact@v4
         with:
           name: firmware
