@@ -45,7 +45,7 @@ jobs:
             COMMIT_MSG=$(git log -1 --pretty=%B)
             echo "Commit message: $COMMIT_MSG"
 
-            VERSION=$(echo "$COMMIT_MSG" | grep -oE 'release/v[0-9]+\.[0-9]+\.[0-9]+$' | cut -d/ -f2)
+            VERSION=$(echo "$COMMIT_MSG" | grep -oE 'release/v[0-9]+\.[0-9]+\.[-0-9p]+$' | cut -d/ -f2)
           else
             echo "::error::Unsupported event context"
           fi
@@ -105,6 +105,10 @@ jobs:
       if: steps.cache_esp_idf.outputs.cache-hit != 'true'
       run: source tools/ci.sh && ci_esp32_idf_setup
 
+    - name: Compute submodule hash
+      id: submodule_hash
+      run: echo "hash=$(git submodule status | sha256sum | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
     - name: Restore submodules
       id: cache_submodules
       uses: actions/cache/restore@v4
@@ -114,7 +118,7 @@ jobs:
           .git/modules/user_modules/
           user_modules/lv_binding_micropython
           lib/
-        key: mpy-submodules-${{ hashFiles('.gitmodules') }}
+        key: mpy-submodules-${{ hashFiles('.gitmodules') }}-${{ hashFiles('**/.gitmodules') }}-${{ steps.submodule_hash.outputs.hash }}
 
     - name: Setup submodules
       if: steps.cache_submodules.outputs.cache-hit != 'true'
