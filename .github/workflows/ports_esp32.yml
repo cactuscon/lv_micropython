@@ -83,6 +83,10 @@ jobs:
       with:
         python-version: '3.9'
 
+    - id: python_ver
+      name: Get Python version
+      run: echo "PYTHON_VER=$(python --version | awk '{print $2}')" | tee "$GITHUB_OUTPUT"
+
     - id: idf_ver
       name: Read the ESP-IDF version
       run: source tools/ci.sh && echo "IDF_VER=$IDF_VER" | tee "$GITHUB_OUTPUT"
@@ -96,7 +100,7 @@ jobs:
           ~/.espressif/
           !~/.espressif/dist/
           ~/.cache/pip/
-        key: esp-idf-${{ steps.idf_ver.outputs.IDF_VER }}
+        key: esp-idf-${{ steps.idf_ver.outputs.IDF_VER }}-py${{ steps.python_ver.outputs.PYTHON_VER }}
 
     - name: Install ESP-IDF packages
       if: steps.cache_esp_idf.outputs.cache-hit != 'true'
