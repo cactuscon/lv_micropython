@@ -133,7 +133,7 @@ function ci_esp32_idf_setup {
 function ci_esp32_build_common {
     source esp-idf/export.sh
     make ${MAKEOPTS} -C mpy-cross
-    make ${MAKEOPTS} -C ports/esp32 submodules
+    make ${MAKEOPTS} -C ports/esp32 USER_C_MODULES=../../../user_modules/lv_binding_micropython/bindings.cmake submodules
 }
 
 function ci_esp32_build_cmod_spiram_s2 {
@@ -158,7 +158,7 @@ function ci_esp32_build_s3_c3 {
 }
 
 function ci_esp32_build_s3_lvgl {
-    ci_esp32_build_common
+    ci_esp32_build_common 
 
     make ${MAKEOPTS} -C ports/esp32 BOARD=ESP32_GENERIC_S3_LVGL
 }
