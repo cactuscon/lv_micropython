@@ -45,7 +45,7 @@ jobs:
             COMMIT_MSG=$(git log -1 --pretty=%B)
             echo "Commit message: $COMMIT_MSG"
 
-            VERSION=$(echo "$COMMIT_MSG" | grep -oE 'release/v[0-9]+\.[0-9]+\.[-0-9p]+$' | cut -d/ -f2)
+            VERSION=$(echo "$COMMIT_MSG" | grep -oE 'release/v[0-9]+\.[0-9]+\.[-0-9p]+$' | tail -1 | cut -d/ -f2)
           else
             echo "::error::Unsupported event context"
           fi
